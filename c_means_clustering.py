@@ -10,7 +10,7 @@ from copy import deepcopy
 
 
 def inverse_sum_PPV_dist(neighbors, cluster):
-    std_dist = 2
+    std_dist = 1000
     
     connected_nodes = cluster.intersection(set(neighbors.keys()))
     if len(connected_nodes) == 0:
@@ -108,7 +108,7 @@ def gather_neighbors(graph, nodes, distance_measure='dist_sum'):
             return 
 
 
-def update_clusters_perc(memberships_dict, clusters, percentile=0.95):
+def update_clusters_perc(memberships_dict, clusters, percentile):
     print(f"Updating Clusters: percentile {percentile}")
     for (node, memberships) in memberships_dict.items():
         perc_lim = np.percentile(list(memberships.values()), percentile)
@@ -120,9 +120,16 @@ def update_clusters_perc(memberships_dict, clusters, percentile=0.95):
     return clusters
 
 
+def update_clusters_thresh(memberships_dict, clusters, t):
+    for (node, memberships) in memberships_dict.items():
+        node_clusters = [cluster_id for (cluster_id, membership) in memberships.items() if membership > t]
+        for cluster_id in node_clusters:
+            clusters[cluster_id].add(node)
+    return clusters
+
 ### Main function
 # path_lengths only necessarz when using the path_len distance measure
-def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95, distance_measure='dist_sum', path_lengths=None):
+def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95, t = 0.5, distance_measure='dist_sum', path_lengths=None):
     # add leiden here after 
     nodes = [node['name'] for node in graph.vs]
     memberships_dict = dict()
@@ -141,7 +148,7 @@ def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95,
 
     del graph
 
-    parallel = Parallel(n_jobs=12, verbose=0, batch_size=32)
+    parallel = Parallel(n_jobs=9, verbose=0, batch_size=32)
     cluster_history = [deepcopy(clusters)]
 
     for i in range(1,n_iter+1):
@@ -152,8 +159,9 @@ def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95,
         
         # return {result[0] : result[2] for result in results}
         memberships_dict = {result[0] : result[2] for result in results}
-         
-        clusters = update_clusters_perc(memberships_dict, clusters, percentile=percentile)
+
+        # clusters = update_clusters_perc(memberships_dict, clusters, percentile=percentile) 
+        clusters = update_clusters_thresh(memberships_dict, clusters, t)
         # clusters = {cluster_id:cluster for (cluster_id, cluster) in clusters.items() if len(cluster) <= 2500}
 
         cluster_history.append(deepcopy(clusters))
