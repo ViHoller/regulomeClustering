@@ -128,7 +128,7 @@ def update_clusters_thresh(memberships_dict, clusters, t):
 
 ### Main function
 # path_lengths only necessarz when using the path_len distance measure
-def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95, t = 0.5, distance_measure='dist_sum', path_lengths=None):
+def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95, t = 0.5, distance_measure='dist_sum', path_lengths=None, cores=6):
     # add leiden here after 
     nodes = [node['name'] for node in graph.vs]
     memberships_dict = dict()
@@ -147,7 +147,7 @@ def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95,
 
     del graph
 
-    parallel = Parallel(n_jobs=9, verbose=0, batch_size=32)
+    parallel = Parallel(n_jobs=cores, verbose=0, batch_size=32)
     cluster_history = [deepcopy(clusters)]
 
     for i in range(1,n_iter+1):
