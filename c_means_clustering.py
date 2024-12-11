@@ -23,22 +23,21 @@ def inverse_sum_PPV_dist(neighbors, cluster):
     return 1 / weights_sum
 
 
-def path_length_dist(path_lengths, cluster):    
-    return mean([path_lengths[node] for node in cluster])
+def path_length_dist(node, path_lengths, cluster):   
+    return mean([path_lengths[cluster_node] for cluster_node in cluster if cluster_node != node])
 
 
-def edge_rate(neighbors, cluster):
+def edge_ratio(neighbors, cluster):
     
     connected_nodes = cluster.intersection(set(neighbors.keys()))
     if len(connected_nodes) == 0:
         return 1 
     
     weights_mean = mean([neighbors[node] for node in connected_nodes])
-    edge_ratio = len(connected_nodes) / len(neighbors)
+    node_edge_ratio = len(connected_nodes) / len(neighbors)
+    return 1 - node_edge_ratio * weights_mean
 
-    return 1 - edge_ratio * weights_mean
-
-def node_c_distances(neighbors, clusters, distance_measure='dist_sum'): # add weight formula argument:
+def node_c_distances(node, neighbors, clusters, distance_measure): # add weight formula argument:
     node_distances = dict()
 
     for (cluster_id, cluster) in clusters.items():
@@ -46,9 +45,9 @@ def node_c_distances(neighbors, clusters, distance_measure='dist_sum'): # add we
             case 'dist_sum':
                 node_distances[cluster_id] =  inverse_sum_PPV_dist(neighbors, cluster)# set 1.5 as max distance, should I set other to more ?
             case 'path_len':
-                node_distances[cluster_id] = path_length_dist(neighbors, cluster)
-            case 'edge_rate':
-                node_distances[cluster_id] = edge_rate(neighbors, cluster)
+                node_distances[cluster_id] = path_length_dist(node, neighbors, cluster)
+            case 'edge_ratio':
+                node_distances[cluster_id] = edge_ratio(neighbors, cluster)
             case _:
                 return # quit function if wrong function name
     return node_distances
@@ -78,8 +77,8 @@ def optimization_function(node_distances, node_memberships, m): # change functio
 
 ### Function for iteration of each node, calculates distance, membership and J
 # Necessary for parallelization
-def node_iteration(node, neighbors, clusters, m, optimize):
-    node_distances = node_c_distances(neighbors, clusters) # returns dictionary with distance to each cluster
+def node_iteration(node, neighbors, clusters, m, optimize, distance_measure):
+    node_distances = node_c_distances(node, neighbors, clusters, distance_measure) # returns dictionary with distance to each cluster
     node_memberships = calc_membership(node_distances, m) # adds memberships of node to dictionary
     if optimize:
         Ji = optimization_function(node_distances, node_memberships, m)
@@ -96,7 +95,7 @@ def gather_neighbors(graph, nodes, distance_measure='dist_sum'):
                     } 
                     for node in nodes
                 }
-        case 'edge_rate':
+        case 'edge_ratio':
             return {
                 node : {
                     graph.vs[neighbor]['name'] : graph.es[graph.get_eid(node, neighbor)]['PPV'] for neighbor in graph.neighbors(node)
@@ -154,19 +153,20 @@ def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95,
     for i in range(1,n_iter+1):
         print(f'Iteration {i} of {n_iter}')
 
-        results = parallel(delayed(node_iteration)(node, connections_dict[node], clusters, m, optimize) for node in tqdm(nodes))
+        results = parallel(delayed(node_iteration)(node, connections_dict[node], clusters, m, optimize, distance_measure) for node in tqdm(nodes))
         Js.append(sum(result[3] for result in results)) # maybe make results into a named tuple
         
         # return {result[0] : result[2] for result in results}
         memberships_dict = {result[0] : result[2] for result in results}
+        distances_dict = {result[0] : result[1] for result in results}
 
-        # clusters = update_clusters_perc(memberships_dict, clusters, percentile=percentile) 
-        clusters = update_clusters_thresh(memberships_dict, clusters, t)
+        clusters = update_clusters_perc(memberships_dict, clusters, percentile=percentile) 
+        # clusters = update_clusters_thresh(memberships_dict, clusters, t)
         # clusters = {cluster_id:cluster for (cluster_id, cluster) in clusters.items() if len(cluster) <= 2500}
 
         cluster_history.append(deepcopy(clusters))
         
 
-        del results, memberships_dict
+        # del results, memberships_dict
         # clear_output()
-    return cluster_history, Js
+    return cluster_history, Js, memberships_dict, distances_dict
