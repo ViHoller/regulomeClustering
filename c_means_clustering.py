@@ -47,11 +47,7 @@ def node_c_distances(node, neighbors, clusters, distance_measure_f): # add weigh
     node_distances = dict()
 
     for (cluster_id, cluster) in clusters.items():
-        try:
-            node_distances[cluster_id] = distance_measure_f(node, neighbors, cluster)
-        except KeyError:
-            print("Somehow you got till here with a wrong distance measure, weird")
-            return 
+        node_distances[cluster_id] = distance_measure_f(node, neighbors, cluster)
     return node_distances
 
 
@@ -152,9 +148,14 @@ def network_c_means(graph, clusters, m, n_iter, optimize=False, percentile=0.95,
         'edge_ratio': edge_ratio,
         'path_len': path_length_dist
     }
+    if distance_measure not in distance_measures.keys():
+        print(f"Distance measure not recognized: {distance_measure}"
+              f"These measures are allowed: {distance_measures.keys()}")
+        return 
+
+
     Js = list()
 
-    # clusters = {cluster_id:cluster for (cluster_id, cluster) in clusters.items() if len(cluster) >= 20}
     
     if distance_measure == 'path_len':
         if path_lengths == None:
